@@ -1,0 +1,217 @@
+---
+title: "Multiple Regression"
+date: "Last updated on `r Sys.Date()`"
+author: "Lauren Forando"
+output:
+  html_document: 
+    code_folding: hide
+    df_print: kable
+    highlight: tango
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: yes
+---
+
+```{r setup, include=FALSE}
+# Set default behavior for all code chunks here:
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  message = FALSE, 
+  warning = FALSE, 
+  fig.width = 16/2, 
+  fig.height = 9/2
+)
+
+# Load all your used packages here:
+library(tidyverse)
+library(scales)
+
+# Set seed value of random number generator here:
+set.seed(76)
+
+# Load data
+training <- read_csv("data/train.csv")
+test <- read_csv("data/test.csv")
+sample_submission <- read_csv("data/sample_submission.csv")
+```
+
+***
+
+# Exploratory data analysis
+
+
+## Choice of variables
+
+Justify why you chose each of your 6 predictor variables here, both in writing and using no more than 6 visualizations.
+
+```{r}
+# Summary Statistics
+Basement <- training %>%
+  select(BsmtUnfSF) %>%
+  na.omit(BsmtUnfSF) 
+# summary(Basement)
+
+Living_Area <- training %>%
+  select(GrLivArea)
+# summary(Living_Area)
+
+Overall_Qual<- training %>%
+  select(OverallQual)
+# summary(Overall_Qual)
+
+training[is.na(training)] <- c(567.2)
+test[is.na(test)] <- c(567.2)
+
+### Graphics
+# Plot of BsmtUnfSF 
+y_hat_BsmtUnfSF<- mean(training$BsmtUnfSF)
+# y_hat_BsmtUnfSF
+
+ggplot(training, aes(x = BsmtUnfSF)) +
+  geom_histogram() +
+  scale_x_log10()  +
+  labs(x = "BsmtUnfSF (log10-scale)")+
+  geom_vline(xintercept=y_hat_BsmtUnfSF, col = "red")
+# Fairly normally distributed log graph
+
+y_hat_OverallQual <- mean(training$OverallQual)
+# y_hat_OverallQual
+ggplot(training, aes(x = OverallQual)) +
+  geom_histogram() + 
+  labs(x = "OverallQual") +
+  geom_vline(xintercept=y_hat_OverallQual, col="red")
+# Fairly normally distributed graph
+  
+y_hat_GrLivArea<- mean(training$GrLivArea)
+# y_hat_GrLivArea
+
+ggplot(training, aes(x = GrLivArea)) +
+  geom_histogram() +
+  scale_x_log10()  +
+  labs(x = "GrLivArea (log10-scale)")+
+  geom_vline(xintercept=y_hat_GrLivArea, col="red")
+# Normally distributed log graph
+
+# Neighborhood
+ggplot(test) + 
+  geom_bar(aes(x = Neighborhood, fill = Neighborhood)) 
+# Fairly normally distributed
+
+# External Quality
+ggplot(test) + 
+  geom_bar(aes(x = ExterQual)) + 
+  labs(caption = "Key: Ex = Excellent, Gd = Good, TA = Average/Typical, Fa = Fair") 
+# Skewed to the right, but most fall within two out of the four categories
+
+# House Style
+ggplot(test) + 
+  geom_bar(aes(x = HouseStyle)) +
+  labs(caption = "Key: 1Story = One Story, 1.5Fin = One and one-half story: 2nd floor finished, 1.5Unf = One and one-half story: 2nd floor unfinished,\n 2Story = Two story, 2.5Unf = Two and one-half story: 2nd level unfinished, SFoyer = Split Foyer, SLevel = Split Level") 
+# Not necesssarily normally distributed, by the majority of houses fall within 3 of the 6 categories
+```
+
+We decided to analyze the following variables:
+
+* *Numeric*: BsmtUnfSF, OverallQual, GrLivArea
+* *Categorical*: Neighborhood, ExterQual, HouseStyle
+
+We decided to analyze BsmtUnfSF because we found that the foundation of a house is usually considered the most expensive part of the house to build, due to the amount of work put into digging, breaking rock, and filling in the foundation with concrete. When looking at the graph for BsmtUnfSF we found that the distribution was fairly normal. In our next observation we find that the overall quality (OverallQual) of a house is important because an individual is not going to invest in a home if they need to remodel extensively and/or replace heating or electrical systems. Looking at the graph for OverallQual, the distribution is fairly normal. Another important aspect of a home is the amount of above ground living area (GrLivArea). The larger the house, the more materials that were needed to build that house, therefore: the selling price of the home will be higher. Looking at the graph for GrLivArea, the distribution is also fairly normal. 
+
+Moving onto categorical values, we first have Neighborhood. Based on where you live, taxes may be higher; you may live close to a high-in-demand area such as a large city or beach/otherwise lakefront or oceanfront; or you might be closer to a school or major highway. So, it makes logical sense that where a home is located will greatly influence its selling price. Looking at the graph for Neighborhood, we find the distribution is fairly normal. Next, exterior quality (ExterQual) is very crucial: once again, an individual is not going to invest as much into a home if they need to hire someone to repaint the outside of the home; replace the sidings or gutters; or pay for new shutters or windows. Looking at the graph for ExterQual, it is skewed to the left, but the majority of homes fall within two of the four categories. Finally, we chose house style (HouseStyle) because the larger a home is, the more it will cost. This is just a logical choice because the larger a home is, the more materials that were needed to build that house, and therefore the selling price of that home will be higher. Looking at the graph for HouseStyle, while the data is not necessarily normally distributed, the majority of homes fall within 3 of the 6 categories.
+
+
+## Other variables considered
+
+Write down all other variables you tried and why you chose not to use them:
+
+* Variable 1: **MSZoning** -> Did not greatly influence adjusted $R^2$ value.
+* Variable 2: **LotFrontage** -> Did not greatly influence adjusted $R^2$ value.
+* Variable 3: **Street** -> Did not greatly influence adjusted $R^2$ value.
+* Variable 4: **Alley** -> Large number of NA values.
+* Variable 5: **YearBuilt** -> Influenced adjusted $R^2$ value, but not to the same extent as the variables chosen.
+* Variable 6: **BsmtExposure** -> Did not greatly influence adjusted $R^2$ value.
+* Variable 7: **HeatingQC** -> Did not greatly influence adjusted $R^2$ value.
+* Variable 8: **FireplaceQu** -> Large number of NA values.
+* Variable 9: **PoolQC** -> Large number of NA values.
+* Variable 10: **Utilities** -> Did not greatly influence adjusted $R^2$ value.
+
+***
+
+# Modeling
+
+
+## Model fit
+
+Fit your ultimate multiple regression model using `lm()` & save it in `SalePrice_model`:
+
+```{r}
+SalePrice_model <- lm(SalePrice ~ BsmtUnfSF + OverallQual + GrLivArea + factor(Neighborhood) + factor(ExterQual) + factor(HouseStyle), data = training)
+# summary(SalePrice_model)
+
+y_hat <- predict(SalePrice_model, newdata = test)
+mean(y_hat)
+```
+
+
+## Compute score on training data
+
+* Apply the fitted/trained model to the training data.
+* Compute the root mean squared logarithmic error using `dplyr` and other R functions. In other words, do not use a `rmsle()` function from another R package.
+* Ensure your score displays in the HTML output
+
+```{r}
+#Calculate RMSE
+n = 1459
+prediction <- predict(SalePrice_model, test)
+
+rmse <- training %>%
+  mutate(predictions = predict(SalePrice_model, .)) %>%
+  summarise(sqrt(sum(predictions - SalePrice)**2/n()))
+
+rmse
+```
+
+
+***
+
+# Kaggle score
+
+
+## Create submission CSV
+
+Below is code that writes the mean of the training set houses to a csv file. Modify this code so that it submits your model's predictions.
+
+```{r}
+submission <- test %>%
+  select(Id) %>%
+  mutate(SalePrice = y_hat)
+
+write_csv(submission, "data/submission.csv")
+```
+
+
+## Screenshot of Kaggle score
+
+After making your submission on Kaggle, take a screenshot, and replace the image of my score with the image of yours below.
+
+![](images/kaggle_score.png){width = 100%}
+![](images/lforando_score.png){width = 100%}
+
+
+## Comparison of score on training data & Kaggle score
+
+Compare your computed score above with the score you got on Kaggle and answer these two questions:
+
+1. How are they different? (Yes, this is a subjective question)
+2. Why are they different?
+
+
+ **Answer** (1) The score computed above is significantly smaller than the score given by Kaggle.
+
+
+ **Answer** (2) The two scores are different as the score computed above tells us how "good" our prediction model is in terms of an RMSE value. The closer to 0 the RMSE value is, the better the prediction model. The number that is given by Kaggle is the accuracy of the model, and it tells how far off the prediction model is from the actual observed values.
+
+
